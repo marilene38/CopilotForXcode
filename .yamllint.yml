@@ -1,0 +1,12 @@
+---
+extends: default
+rules:
+  # GitHub Actions uses 'on' as a key which yamllint treats as a truthy value
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
+  # Workflow files often have long lines (URLs, multi-line strings)
+  line-length:
+    max: 160
+    level: warning
+  # GitHub Actions workflow files do not require a document-start marker
+  document-start: disable
