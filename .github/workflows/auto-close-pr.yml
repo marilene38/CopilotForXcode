@@ -1,20 +1,37 @@
 name: Auto-close PR
+
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: auto-close-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   close:
-    name: Run
+    name: Close fork PRs with guidance
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     steps:
-      - run: |
-          gh pr close ${{ github.event.pull_request.number }} --comment \
-          "At the moment we are not accepting contributions to the repository.
-
-          Feedback for GitHub Copilot for Xcode can be given in the [Copilot community discussions](https://github.com/orgs/community/discussions/categories/copilot)."
+      - name: Close PR from fork with message
+        if: >-
+          github.event.pull_request.head.repo.full_name != github.repository &&
+          github.event.pull_request.state == 'open'
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh pr close "$PR_NUMBER" \
+            --reason not_planned \
+            --comment "$(cat <<'EOF'
+          Thanks for the pull request! At the moment we are not accepting contributions to this repository.
+
+          Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
+          https://github.com/orgs/community/discussions/categories/copilot
+          EOF
+          )"
