@@ -1,20 +1,130 @@
 name: Auto-close PR
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, synchronize, reopened]
 
 jobs:
+  lint-workflow:
+    name: Lint workflow YAML
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install yamllint and actionlint
+        run: |
+          pip install --quiet yamllint
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+      - name: Lint YAML structure
+        run: yamllint -c .yamllint.yml .github/workflows/auto-close-pr.yml
+
+      - name: Static analysis with actionlint
+        run: actionlint .github/workflows/auto-close-pr.yml
+
   close:
     name: Run
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
-      - run: |
-          gh pr close ${{ github.event.pull_request.number }} --comment \
-          "At the moment we are not accepting contributions to the repository.
+      - name: Log workflow trigger metadata
+        run: |
+          echo "=== Workflow Trigger Details ==="
+          echo "Event type      : ${{ github.event_name }}"
+          echo "Action          : ${{ github.event.action }}"
+          echo "PR number       : ${{ github.event.pull_request.number }}"
+          echo "PR author       : ${{ github.event.pull_request.user.login }}"
+          echo "Fork repo       : ${{ github.event.pull_request.head.repo.full_name }}"
+          echo "Base repo       : ${{ github.repository }}"
+          echo "Head ref        : ${{ github.event.pull_request.head.ref }}"
+          echo "Base ref        : ${{ github.event.pull_request.base.ref }}"
 
-          Feedback for GitHub Copilot for Xcode can be given in the [Copilot community discussions](https://github.com/orgs/community/discussions/categories/copilot)."
+      - name: Check if PR is from a fork
+        id: fork-check
+        run: |
+          HEAD_REPO="${{ github.event.pull_request.head.repo.full_name }}"
+          BASE_REPO="${{ github.repository }}"
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP: PR is from the same repository ($HEAD_REPO). Skipping auto-close."
+          else
+            echo "is_fork=true" >> "$GITHUB_OUTPUT"
+            echo "INFO: PR is from a fork ($HEAD_REPO)."
+          fi
+
+      - name: Check for trusted contributor
+        id: trusted-check
+        if: steps.fork-check.outputs.is_fork == 'true'
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          TRUSTED_CONTRIBUTORS: ${{ secrets.TRUSTED_CONTRIBUTORS }}
+        run: |
+          if [ -z "$TRUSTED_CONTRIBUTORS" ]; then
+            echo "is_trusted=false" >> "$GITHUB_OUTPUT"
+            echo "INFO: TRUSTED_CONTRIBUTORS secret is not set."
+          else
+            # TRUSTED_CONTRIBUTORS is expected to be a comma-separated list of GitHub usernames
+            # (alphanumeric and hyphens only). We check for an exact match to avoid partial hits.
+            is_trusted=false
+            IFS=',' read -ra TRUSTED_LIST <<< "$TRUSTED_CONTRIBUTORS"
+            for username in "${TRUSTED_LIST[@]}"; do
+              trimmed=$(echo "$username" | xargs)
+              if [ "$trimmed" = "$PR_AUTHOR" ]; then
+                is_trusted=true
+                break
+              fi
+            done
+            if [ "$is_trusted" = "true" ]; then
+              echo "is_trusted=true" >> "$GITHUB_OUTPUT"
+              echo "SKIP: PR author '$PR_AUTHOR' is in TRUSTED_CONTRIBUTORS list. Skipping auto-close."
+            else
+              echo "is_trusted=false" >> "$GITHUB_OUTPUT"
+              echo "INFO: PR author '$PR_AUTHOR' is not in TRUSTED_CONTRIBUTORS list."
+            fi
+          fi
+
+      - name: Check for review-fork-pr label
+        id: label-check
+        if: steps.fork-check.outputs.is_fork == 'true' && steps.trusted-check.outputs.is_trusted != 'true'
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          LABEL_FOUND=$(gh pr view "$PR_NUMBER" --json labels \
+            --jq 'any(.labels[]; .name == "review-fork-pr")' 2>/dev/null || echo "false")
+          if [ "$LABEL_FOUND" = "true" ]; then
+            echo "has_exception_label=true" >> "$GITHUB_OUTPUT"
+            echo "SKIP: PR #$PR_NUMBER has 'review-fork-pr' label. Skipping auto-close."
+          else
+            echo "has_exception_label=false" >> "$GITHUB_OUTPUT"
+            echo "INFO: PR #$PR_NUMBER does not have 'review-fork-pr' label."
+          fi
+
+      - name: Close fork PR
+        if: >
+          steps.fork-check.outputs.is_fork == 'true' &&
+          steps.trusted-check.outputs.is_trusted != 'true' &&
+          steps.label-check.outputs.has_exception_label != 'true'
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "ACTION: Closing PR #$PR_NUMBER from fork '${{ github.event.pull_request.head.repo.full_name }}'."
+          gh pr close "$PR_NUMBER" --comment \
+          "Thank you for your interest in GitHub Copilot for Xcode! 🙏
+
+          At this time, **we are not accepting code contributions via pull requests** from forks of this repository. This PR has been automatically closed.
+
+          ### How you can still contribute:
+          - 🐛 **Report a bug** – [open a bug report](../../issues/new?template=bug_report.md)
+          - 💡 **Request a feature** – [open a feature request](../../issues/new?template=feature_request.md)
+          - 💬 **Join the discussion** – share feedback in the [Copilot community discussions](https://github.com/orgs/community/discussions/categories/copilot)
+
+          For more details on why PRs from forks are closed and alternative ways to engage, please see [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md).
+
+          We appreciate your understanding!"
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
