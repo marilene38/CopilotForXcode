@@ -16,6 +16,13 @@ jobs:
     name: Close fork PRs with guidance
     runs-on: ubuntu-latest
     steps:
+      - name: Log skipped PR (non-fork or already closed)
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository ||
+          github.event.pull_request.state != 'open'
+        run: |
+          echo "Skipping PR #${{ github.event.pull_request.number }}: not from a fork or not in open state (state=${{ github.event.pull_request.state }}, head_repo=${{ github.event.pull_request.head.repo.full_name || 'deleted' }})"
+
       - name: Close PR from fork with message
         if: >-
           github.event.pull_request.head.repo.full_name != github.repository &&
@@ -24,14 +31,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
           set -euo pipefail
+          echo "Closing PR #$PR_NUMBER from fork '$HEAD_REPO' (author: $PR_AUTHOR)"
           gh pr close "$PR_NUMBER" \
             --reason not_planned \
             --comment "$(cat <<'EOF'
-          Thanks for the pull request! At the moment we are not accepting contributions to this repository.
+          Thanks for the pull request! At the moment, we are not accepting contributions to this repository.
 
-          Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
-          https://github.com/orgs/community/discussions/categories/copilot
+          Here are some ways you can still participate:
+          - Share feedback in the [Copilot community discussions](https://github.com/orgs/community/discussions/categories/copilot)
+          - Submit a [bug report or feature request](https://github.com/$GH_REPO/issues)
           EOF
           )"
