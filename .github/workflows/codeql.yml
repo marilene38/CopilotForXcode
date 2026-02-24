@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '24 23 * * 1'
 
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -35,6 +39,20 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Log analysis start
+      env:
+        LANGUAGE: ${{ matrix.language }}
+        BUILD_MODE: ${{ matrix.build-mode }}
+        REF: ${{ github.ref }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        echo "::group::CodeQL Analysis Details"
+        echo "Language: $LANGUAGE"
+        echo "Build mode: $BUILD_MODE"
+        echo "Ref: $REF"
+        echo "Event: $EVENT"
+        echo "::endgroup::"
+
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
@@ -54,6 +72,7 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
+        echo "::group::Build"
         xcodebuild \
           -scheme 'Copilot for Xcode' \
           -quiet \
@@ -64,6 +83,7 @@ jobs:
           -workspace 'Copilot for Xcode.xcworkspace' \
           archive \
           CODE_SIGNING_ALLOWED="NO"
+        echo "::endgroup::"
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
