@@ -16,6 +16,22 @@ jobs:
     name: Close fork PRs with guidance
     runs-on: ubuntu-latest
     steps:
+      - name: Log PR details
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          echo "::group::PR Details"
+          echo "PR number: $PR_NUMBER"
+          echo "PR author: $PR_AUTHOR"
+          echo "Head repo: $PR_HEAD_REPO"
+          echo "PR state: $PR_STATE"
+          echo "Event action: $EVENT_ACTION"
+          echo "::endgroup::"
+
       - name: Close PR from fork with message
         if: >-
           github.event.pull_request.head.repo.full_name != github.repository &&
@@ -26,12 +42,43 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          gh pr close "$PR_NUMBER" \
-            --reason not_planned \
-            --comment "$(cat <<'EOF'
+          MAX_RETRIES=3
+          BACKOFF_SECONDS=5
+          echo "::notice::Closing fork PR #$PR_NUMBER"
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            if gh pr close "$PR_NUMBER" \
+              --reason not_planned \
+              --comment "$(cat <<'EOF'
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot
           EOF
-          )"
+          )"; then
+              echo "::notice::Successfully closed PR #$PR_NUMBER on attempt $attempt"
+              break
+            else
+              echo "::warning::Attempt $attempt to close PR #$PR_NUMBER failed"
+              if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+                sleep $((attempt * BACKOFF_SECONDS))
+              else
+                echo "::error::Failed to close PR #$PR_NUMBER after $attempt attempts"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Log skip reason
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository ||
+          github.event.pull_request.state != 'open'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+        run: |
+          if [ "$PR_HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
+            echo "::notice::Skipping PR #$PR_NUMBER: opened from the same repository"
+          else
+            echo "::notice::Skipping PR #$PR_NUMBER: PR state is '$PR_STATE' (not open)"
+          fi
