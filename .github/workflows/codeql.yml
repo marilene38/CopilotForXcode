@@ -1,3 +1,31 @@
+# CodeQL Advanced analysis workflow
+#
+# Purpose:
+#   Runs GitHub's CodeQL static-analysis engine against all supported languages
+#   in the repository to surface security vulnerabilities and code-quality issues.
+#
+# Triggers:
+#   - push to main       — ensures the default branch is always analysed.
+#   - pull_request to main — provides per-PR security feedback before merge.
+#   - weekly schedule    — catches newly published queries against existing code.
+#
+# Concurrency:
+#   Groups by ref so that rapid push/PR events on the same branch cancel
+#   earlier in-progress runs.  Scheduled and push runs are never cancelled
+#   (cancel-in-progress is false for those events) so no analysis is silently
+#   dropped on the default branch.
+#
+# Matrix:
+#   - python  (build-mode: none)   — interpreted language; no build required.
+#   - swift   (build-mode: manual) — compiled language; xcodebuild archive used.
+#
+# Improvement notes (PR #7 and follow-up review):
+#   - Added top-level concurrency block to prevent redundant parallel runs.
+#   - Added structured ::group:: log step before analysis to surface language,
+#     build mode, ref, and triggering event.
+#   - Wrapped xcodebuild output in a ::group::Build block for easier log
+#     navigation and added execution-time measurement.
+
 name: "CodeQL Advanced"
 
 on:
@@ -7,6 +35,12 @@ on:
     branches: [ "main" ]
   schedule:
     - cron: '24 23 * * 1'
+
+# Cancel in-progress runs for pull_request events; preserve push/schedule runs
+# so that the default-branch analysis is never silently dropped.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:
@@ -35,6 +69,20 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Log analysis start
+      env:
+        LANGUAGE: ${{ matrix.language }}
+        BUILD_MODE: ${{ matrix.build-mode }}
+        REF: ${{ github.ref }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        echo "::group::CodeQL Analysis Details"
+        echo "Language   : $LANGUAGE"
+        echo "Build mode : $BUILD_MODE"
+        echo "Ref        : $REF"
+        echo "Event      : $EVENT"
+        echo "::endgroup::"
+
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
@@ -54,6 +102,8 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
+        echo "::group::Build"
+        BUILD_START=$(date +%s)
         xcodebuild \
           -scheme 'Copilot for Xcode' \
           -quiet \
@@ -64,6 +114,9 @@ jobs:
           -workspace 'Copilot for Xcode.xcworkspace' \
           archive \
           CODE_SIGNING_ALLOWED="NO"
+        BUILD_END=$(date +%s)
+        echo "Build completed in $((BUILD_END - BUILD_START))s"
+        echo "::endgroup::"
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
