@@ -32,6 +32,13 @@ jobs:
         - language: swift
           build-mode: manual
     steps:
+    - name: Log run context
+      run: |
+        echo "Workflow run ID : ${{ github.run_id }}"
+        echo "Commit SHA      : ${{ github.sha }}"
+        echo "Ref             : ${{ github.ref }}"
+        echo "Language        : ${{ matrix.language }}"
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -51,7 +58,9 @@ jobs:
     - if: matrix.build-mode == 'manual'
       uses: ./.github/actions/set-xcode-version
 
-    - if: matrix.build-mode == 'manual'
+    - if: >-
+        matrix.build-mode == 'manual' &&
+        (github.event_name != 'pull_request' || github.base_ref == 'main')
       shell: bash
       run: |
         xcodebuild \

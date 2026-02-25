@@ -11,11 +11,21 @@ concurrency:
   group: auto-close-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+env:
+  MAX_RETRIES: 3
+  BACKOFF_SECONDS: 5
+
 jobs:
   close:
     name: Close fork PRs with guidance
     runs-on: ubuntu-latest
     steps:
+      - name: Log skipped PR (same-repo)
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          echo "PR #${{ github.event.pull_request.number }} is from the same repository – skipping auto-close."
+
       - name: Close PR from fork with message
         if: >-
           github.event.pull_request.head.repo.full_name != github.repository &&
@@ -26,12 +36,24 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          gh pr close "$PR_NUMBER" \
-            --reason not_planned \
-            --comment "$(cat <<'EOF'
+          for attempt in $(seq 1 "$MAX_RETRIES"); do
+            if gh pr close "$PR_NUMBER" \
+              --reason not_planned \
+              --comment "$(cat <<'EOF'
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot
           EOF
-          )"
+            )"; then
+              echo "PR #$PR_NUMBER closed successfully on attempt $attempt."
+              break
+            fi
+            if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+              echo "Attempt $attempt failed. Retrying in ${BACKOFF_SECONDS}s..."
+              sleep "$BACKOFF_SECONDS"
+            else
+              echo "All $MAX_RETRIES attempts failed."
+              exit 1
+            fi
+          done
