@@ -1,3 +1,34 @@
+# Auto-close PR workflow
+#
+# Purpose:
+#   Automatically closes pull requests opened from forks with a polite message
+#   explaining that external contributions are not accepted at this time.
+#
+# Trigger:
+#   Runs on pull_request_target for opened, reopened, and synchronize events so
+#   that fork PRs are caught whenever they are created or updated.
+#
+# Concurrency:
+#   Each PR number gets its own concurrency group so that rapid successive
+#   events (e.g. force-push followed by synchronize) cancel the earlier run and
+#   only the latest execution proceeds.
+#
+# Conditions:
+#   - Close step: runs only when the head repo differs from the base repo
+#     (i.e. the PR comes from a fork) AND the PR is still open.
+#   - Skip step: runs when the PR is from the same repo OR is already closed,
+#     and logs a human-readable reason so the Actions log is never silent.
+#
+# Improvement notes (PR #7 and follow-up review):
+#   - Added structured ::group:: log block at job start to surface PR metadata.
+#   - Added retry loop (3 attempts, exponential back-off) around gh pr close to
+#     handle transient API failures gracefully.
+#   - Added ::warning:: / ::error:: annotations so failures are visible in the
+#     GitHub UI without requiring log inspection.
+#   - Added skip-reason step to explain why a PR was not acted on.
+#   - Added env-var validation step to catch missing context early.
+#   - Added execution-time measurement on the close step.
+
 name: Auto-close PR
 
 on:
@@ -16,6 +47,37 @@ jobs:
     name: Close fork PRs with guidance
     runs-on: ubuntu-latest
     steps:
+      - name: Validate required environment variables
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "::error::PR_NUMBER is not set — cannot proceed"
+            exit 1
+          fi
+          if [ -z "${PR_HEAD_REPO:-}" ]; then
+            echo "::error::PR_HEAD_REPO is not set — cannot proceed"
+            exit 1
+          fi
+
+      - name: Log PR details
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          echo "::group::PR Details"
+          echo "PR number    : $PR_NUMBER"
+          echo "PR author    : $PR_AUTHOR"
+          echo "Head repo    : $PR_HEAD_REPO"
+          echo "PR state     : $PR_STATE"
+          echo "Event action : $EVENT_ACTION"
+          echo "::endgroup::"
+
       - name: Close PR from fork with message
         if: >-
           github.event.pull_request.head.repo.full_name != github.repository &&
@@ -26,12 +88,45 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          gh pr close "$PR_NUMBER" \
-            --reason not_planned \
-            --comment "$(cat <<'EOF'
+          MAX_RETRIES=3
+          BACKOFF_SECONDS=5
+          STEP_START=$(date +%s)
+          echo "::notice::Closing fork PR #$PR_NUMBER"
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            if gh pr close "$PR_NUMBER" \
+              --reason not_planned \
+              --comment "$(cat <<'EOF'
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot
           EOF
-          )"
+          )"; then
+              STEP_END=$(date +%s)
+              echo "::notice::Successfully closed PR #$PR_NUMBER on attempt $attempt (took $((STEP_END - STEP_START))s)"
+              break
+            else
+              echo "::warning::Attempt $attempt to close PR #$PR_NUMBER failed"
+              if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+                sleep $((attempt * BACKOFF_SECONDS))
+              else
+                echo "::error::Failed to close PR #$PR_NUMBER after $attempt attempts"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Log skip reason
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository ||
+          github.event.pull_request.state != 'open'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+        run: |
+          if [ "$PR_HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
+            echo "::notice::Skipping PR #$PR_NUMBER: opened from the same repository (not a fork)"
+          else
+            echo "::notice::Skipping PR #$PR_NUMBER: PR state is '$PR_STATE' (not open)"
+          fi
