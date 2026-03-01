@@ -140,6 +140,12 @@ We’d love to get your help in making GitHub Copilot better!  If you have
 feedback or encounter any problems, please reach out on our [Feedback
 forum](https://github.com/orgs/community/discussions/categories/copilot).
 
+## Contributing Feedback
+
+We currently do not accept pull requests to this repository. Please share ideas,
+questions, and bug reports through the [Copilot community
+discussions](https://github.com/orgs/community/discussions/categories/copilot).
+
 ## Acknowledgements
 
 Thank you to @intitni for creating the original project that this is based on.

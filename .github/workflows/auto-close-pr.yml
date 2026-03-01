@@ -2,11 +2,10 @@ name: Auto-close PR
 
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
 
 permissions:
   pull-requests: write
-  issues: write
 
 concurrency:
   group: auto-close-pr-${{ github.event.pull_request.number }}
@@ -15,6 +14,10 @@ concurrency:
 jobs:
   close:
     name: Close fork PRs with guidance
+    if: >-
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      github.event.pull_request.state == 'open' &&
+      !contains(github.event.pull_request.labels.*.name, 'auto-closed')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -33,19 +36,21 @@ jobs:
           echo "has_auto_closed_label=$has_auto_closed_label"
 
       - name: Close PR from fork with message
-        if: >-
-          github.event.pull_request.head.repo.full_name != github.repository &&
-          github.event.pull_request.state == 'open' &&
-          github.event.pull_request.author_association == 'NONE' &&
-          !contains(github.event.pull_request.labels.*.name, 'auto-closed')
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "PR_NUMBER is required but was not set" >&2
+            exit 1
+          fi
           COMMENT="$(cat <<'EOF'
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
+
+          We currently only accept issues and discussions for this project:
+          https://github.com/github/CopilotForXcode#contributing-feedback
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot
