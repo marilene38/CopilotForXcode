@@ -2,10 +2,11 @@ name: Auto-close PR
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened]
 
 permissions:
   pull-requests: write
+  issues: write
 
 concurrency:
   group: auto-close-pr-${{ github.event.pull_request.number }}
@@ -15,23 +16,54 @@ jobs:
   close:
     name: Close fork PRs with guidance
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      - name: Debug context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          has_auto_closed_label="${{ contains(github.event.pull_request.labels.*.name, 'auto-closed') }}"
+          echo "pr_number=${{ github.event.pull_request.number }}"
+          echo "pr_state=${{ github.event.pull_request.state }}"
+          echo "head_repo=${{ github.event.pull_request.head.repo.full_name }}"
+          echo "base_repo=${{ github.repository }}"
+          echo "author_association=${{ github.event.pull_request.author_association }}"
+          echo "event_action=${{ github.event.action }}"
+          echo "has_auto_closed_label=$has_auto_closed_label"
+
       - name: Close PR from fork with message
         if: >-
           github.event.pull_request.head.repo.full_name != github.repository &&
-          github.event.pull_request.state == 'open'
+          github.event.pull_request.state == 'open' &&
+          github.event.pull_request.author_association == 'NONE' &&
+          !contains(github.event.pull_request.labels.*.name, 'auto-closed')
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          gh pr close "$PR_NUMBER" \
-            --reason not_planned \
-            --comment "$(cat <<'EOF'
+          COMMENT="$(cat <<'EOF'
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot
           EOF
           )"
+          max_attempts=3
+          for attempt in $(seq 1 "$max_attempts"); do
+            if gh pr close "$PR_NUMBER" --reason not_planned --comment "$COMMENT"; then
+              break
+            elif [ "$attempt" -eq "$max_attempts" ]; then
+              echo "All $max_attempts attempts to close PR failed" >&2
+              exit 1
+            else
+              echo "Attempt $attempt failed, retrying in $((attempt * 5))s..."
+              sleep $((attempt * 5))
+            fi
+          done
+          gh label create "auto-closed" --force --color "d93f0b" --description "PR was automatically closed" \
+            || echo "::warning::Failed to create/update auto-closed label; label may not exist in repository"
+          gh pr edit "$PR_NUMBER" --add-label "auto-closed"
+          echo "✅ PR #$PR_NUMBER closed and labeled \`auto-closed\`" >> "$GITHUB_STEP_SUMMARY"
