@@ -38,20 +38,17 @@ jobs:
           github.event.pull_request.author_association == 'NONE' &&
           !contains(github.event.pull_request.labels.*.name, 'auto-closed')
         env:
-          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          : "${PR_NUMBER:?PR_NUMBER is required}"
-          : "${GH_REPO:?GH_REPO is required}"
-          DOCS_URL="https://github.com/${GH_REPO}#contributions"
-          echo "Closing PR #$PR_NUMBER due to fork policy. See $DOCS_URL"
-          COMMENT="$(cat <<EOF
+          : "${PR_NUMBER:?PR_NUMBER environment variable must be set}"
+          echo "Closing PR #$PR_NUMBER due to fork policy. See https://github.com/${{ github.repository }}#contributions"
+          COMMENT="$(cat <<'EOF'
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
 
           Why this PR was auto-closed:
-          $DOCS_URL
+          https://github.com/${{ github.repository }}#contributions
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot
