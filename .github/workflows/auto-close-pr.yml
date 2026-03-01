@@ -2,11 +2,10 @@ name: Auto-close PR
 
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
 
 permissions:
   pull-requests: write
-  issues: write
 
 concurrency:
   group: auto-close-pr-${{ github.event.pull_request.number }}
@@ -44,8 +43,15 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          COMMENT="$(cat <<'EOF'
+          : "${PR_NUMBER:?PR_NUMBER is required}"
+          : "${GH_REPO:?GH_REPO is required}"
+          DOCS_URL="https://github.com/${GH_REPO}#contributions"
+          echo "Closing PR #$PR_NUMBER due to fork policy. See $DOCS_URL"
+          COMMENT="$(cat <<EOF
           Thanks for the pull request! At the moment we are not accepting contributions to this repository.
+
+          Why this PR was auto-closed:
+          $DOCS_URL
 
           Feedback for GitHub Copilot for Xcode can be shared in the Copilot community discussions:
           https://github.com/orgs/community/discussions/categories/copilot

@@ -134,6 +134,13 @@ We follow responsible practices in accordance with our
 To get the latest security fixes, please use the latest version of the GitHub
 Copilot for Xcode.
 
+## Contributions
+
+At the moment we are not accepting code contributions through pull requests in this repository. Pull requests opened from forks are automatically closed.
+
+Please share product feedback in the Copilot community discussions:
+https://github.com/orgs/community/discussions/categories/copilot
+
 ## Support
 
 We’d love to get your help in making GitHub Copilot better!  If you have
