@@ -1,0 +1,80 @@
+name: Build Notifications
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - "CodeQL Advanced"
+    types:
+      - completed
+
+jobs:
+  notify-on-failure:
+    name: Notify on build failure
+    runs-on: ubuntu-latest
+    permissions: {}
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Build structured log entry
+        id: log
+        run: |
+          echo "workflow=${{ github.event.workflow_run.name }}" >> "$GITHUB_OUTPUT"
+          echo "branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+          echo "commit=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          echo "url=${{ github.event.workflow_run.html_url }}" >> "$GITHUB_OUTPUT"
+          echo "actor=${{ github.event.workflow_run.triggering_actor.login }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log structured failure event
+        run: |
+          echo '{
+            "level": "error",
+            "event": "build_failure",
+            "workflow": "${{ steps.log.outputs.workflow }}",
+            "branch": "${{ steps.log.outputs.branch }}",
+            "commit": "${{ steps.log.outputs.commit }}",
+            "actor": "${{ steps.log.outputs.actor }}",
+            "url": "${{ steps.log.outputs.url }}"
+          }'
+
+      - name: Send Slack notification
+        if: ${{ vars.SLACK_NOTIFICATIONS_ENABLED == 'true' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":x: *Build failure* in `${{ github.repository }}`",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    { "title": "Workflow", "value": "${{ steps.log.outputs.workflow }}", "short": true },
+                    { "title": "Branch",   "value": "${{ steps.log.outputs.branch }}",   "short": true },
+                    { "title": "Commit",   "value": "${{ steps.log.outputs.commit }}",   "short": true },
+                    { "title": "Actor",    "value": "${{ steps.log.outputs.actor }}",    "short": true },
+                    { "title": "Details",  "value": "${{ steps.log.outputs.url }}",      "short": false }
+                  ]
+                }
+              ]
+            }
+
+      - name: Send email notification
+        if: ${{ vars.EMAIL_NOTIFICATIONS_ENABLED == 'true' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ secrets.MAIL_RECIPIENTS }}
+          from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
+          subject: "[Build Failure] ${{ steps.log.outputs.workflow }} on ${{ steps.log.outputs.branch }}"
+          body: |
+            Build failure detected in ${{ github.repository }}.
+
+            Workflow : ${{ steps.log.outputs.workflow }}
+            Branch   : ${{ steps.log.outputs.branch }}
+            Commit   : ${{ steps.log.outputs.commit }}
+            Actor    : ${{ steps.log.outputs.actor }}
+            Details  : ${{ steps.log.outputs.url }}

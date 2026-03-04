@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+      - 'feature/**'
+      - 'hotfix/**'
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
+
+jobs:
+  resolve-environment:
+    name: Resolve deployment environment
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+    steps:
+      - name: Determine environment from branch
+        id: set-env
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == release/* ]]; then
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=development" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build (${{ needs.resolve-environment.outputs.environment }})
+    needs: resolve-environment
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Xcode version
+        uses: ./.github/actions/set-xcode-version
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -workspace 'Copilot for Xcode.xcworkspace' \
+            -scheme 'Copilot for Xcode'
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -scheme 'Copilot for Xcode' \
+            -workspace 'Copilot for Xcode.xcworkspace' \
+            -configuration Release \
+            -skipMacroValidation \
+            -disableAutomaticPackageResolution \
+            CODE_SIGNING_ALLOWED="NO" \
+            build
