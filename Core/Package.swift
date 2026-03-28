@@ -36,6 +36,10 @@ let package = Package(
                 "GitHubCopilotViewModel",
             ]
         ),
+        .library(
+            name: "AlloWallet",
+            targets: ["AlloWallet"]
+        ),
     ],
     dependencies: [
         .package(path: "../Tool"),
@@ -119,6 +123,7 @@ let package = Package(
                 name: "HostApp",
                 dependencies: [
                     "Client",
+                    "AlloWallet",
                     "LaunchAgentManager",
                     "GitHubCopilotViewModel",
                     .product(name: "SuggestionProvider", package: "Tool"),
@@ -295,7 +300,18 @@ let package = Package(
                 .product(name: "ChatAPIService", package: "Tool"),
                 .product(name: "ConversationServiceProvider", package: "Tool")
             ]
-        )
+        ),
+
+        // MARK: - Allo Wallet
+
+        .target(
+            name: "AlloWallet",
+            dependencies: []
+        ),
+        .testTarget(
+            name: "AlloWalletTests",
+            dependencies: ["AlloWallet"]
+        ),
     ]
 )
 

@@ -1,3 +1,4 @@
+import AlloWallet
 import ComposableArchitecture
 import Dependencies
 import Foundation
@@ -55,6 +56,11 @@ public struct TabContainer: View {
                         tag: 2,
                         title: "MCP",
                         image: "wrench.and.screwdriver.fill"
+                    )
+                    AlloWalletView().tabBarItem(
+                        tag: 3,
+                        title: "Allo Wallet",
+                        image: "wallet.pass"
                     )
                 }
                 .environment(\.tabBarTabTag, tag)
