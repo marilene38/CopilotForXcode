@@ -71,14 +71,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-parsing", from: "0.12.1"),
         .package(url: "https://github.com/ChimeHQ/JSONRPC", exact: "0.6.0"),
-        .package(url: "https://github.com/devm33/Highlightr", branch: "master"),
+        .package(url: "https://github.com/devm33/Highlightr", revision: "81d8c8b3733939bf5d9e52cd6318f944cc033bd2"),
         .package(
             url: "https://github.com/pointfreeco/swift-composable-architecture",
             from: "1.10.4"
         ),
         .package(url: "https://github.com/GottaGetSwifty/CodableWrappers", from: "2.0.7"),
         // TODO: remove CopilotForXcodeKit dependency once extension provider logic is removed.
-        .package(url: "https://github.com/devm33/CopilotForXcodeKit", branch: "main"),
+        .package(url: "https://github.com/devm33/CopilotForXcodeKit", revision: "1f98fe9795766d3e37b5ae3d2e5f69f9b0af308b"),
         .package(url: "https://github.com/stephencelis/SQLite.swift", from: "0.15.3")
     ],
     targets: [
@@ -354,4 +354,3 @@ let package = Package(
         .testTarget(name: "SystemUtilsTests", dependencies: ["SystemUtils"]),
     ]
 )
-

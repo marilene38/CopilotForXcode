@@ -50,9 +50,9 @@ let package = Package(
         ),
         // quick hack to support custom UserDefaults
         // https://github.com/sindresorhus/KeyboardShortcuts
-            .package(url: "https://github.com/devm33/KeyboardShortcuts", branch: "main"),
-        .package(url: "https://github.com/devm33/CGEventOverride", branch: "devm33/fix-stale-AXIsProcessTrusted"),
-        .package(url: "https://github.com/devm33/Highlightr", branch: "master"),
+            .package(url: "https://github.com/devm33/KeyboardShortcuts", revision: "65fb410b0c6d3ed96623b460bab31ffce5f48b4d"),
+        .package(url: "https://github.com/devm33/CGEventOverride", revision: "06a9bf1f8f8d47cca221344101cc0274f04cc513"),
+        .package(url: "https://github.com/devm33/Highlightr", revision: "81d8c8b3733939bf5d9e52cd6318f944cc033bd2"),
         .package(url: "https://github.com/globulus/swiftui-flow-layout",
                  from: "1.0.5")
     ],
