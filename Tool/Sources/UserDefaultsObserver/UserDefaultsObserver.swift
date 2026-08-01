@@ -1,5 +1,6 @@
 import Foundation
 
+#if os(macOS)
 public final class UserDefaultsObserver: NSObject {
     public var onChange: (() -> Void)?
     private weak var object: NSObject?
@@ -33,4 +34,14 @@ public final class UserDefaultsObserver: NSObject {
         onChange?()
     }
 }
+#else
+public final class UserDefaultsObserver {
+    public var onChange: (() -> Void)?
 
+    public init(
+        object _: NSObject,
+        forKeyPaths _: [String],
+        context _: UnsafeMutableRawPointer?
+    ) {}
+}
+#endif
