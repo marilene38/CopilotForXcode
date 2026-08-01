@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swiftpm-sanity:
+    name: SwiftPM sanity
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/set-xcode-version
+
+      - name: Core package describe
+        run: |
+          cd Core
+          swift package describe
+
+      - name: Tool package describe
+        run: |
+          cd Tool
+          swift package describe
+
+  xcode-build:
+    name: Xcode build
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/set-xcode-version
+
+      - name: Build Copilot for Xcode
+        run: |
+          xcodebuild \
+            -scheme 'Copilot for Xcode' \
+            -workspace 'Copilot for Xcode.xcworkspace' \
+            -configuration Debug \
+            -skipMacroValidation \
+            -disableAutomaticPackageResolution \
+            build \
+            CODE_SIGNING_ALLOWED="NO"
