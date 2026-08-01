@@ -182,7 +182,11 @@ let package = Package(
                 "SuggestionBasic",
                 "SuggestionProvider",
                 "Workspace",
-                .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
+                .product(
+                    name: "CopilotForXcodeKit",
+                    package: "CopilotForXcodeKit",
+                    condition: .when(platforms: [.macOS])
+                ),
             ]
         ),
 
@@ -266,17 +270,29 @@ let package = Package(
             "UserDefaultsObserver",
             "Preferences",
             "Logger",
-            .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
+            .product(
+                name: "CopilotForXcodeKit",
+                package: "CopilotForXcodeKit",
+                condition: .when(platforms: [.macOS])
+            ),
         ]),
         .testTarget(name: "SuggestionProviderTests", dependencies: ["SuggestionProvider"]),
         
         .target(name: "ConversationServiceProvider", dependencies: [
-            .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
+            .product(
+                name: "CopilotForXcodeKit",
+                package: "CopilotForXcodeKit",
+                condition: .when(platforms: [.macOS])
+            ),
             .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
         ]),
         
         .target(name: "TelemetryServiceProvider", dependencies: [
-            .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
+            .product(
+                name: "CopilotForXcodeKit",
+                package: "CopilotForXcodeKit",
+                condition: .when(platforms: [.macOS])
+            ),
         ]),
         
         .target(
@@ -309,7 +325,11 @@ let package = Package(
                 "Workspace",
                 "Persist",
                 .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
-                .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
+                .product(
+                    name: "CopilotForXcodeKit",
+                    package: "CopilotForXcodeKit",
+                    condition: .when(platforms: [.macOS])
+                ),
             ]
         ),
         .testTarget(
