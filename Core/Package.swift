@@ -201,7 +201,6 @@ let package = Package(
                     .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                     .product(name: "SwiftUIFlowLayout", package: "swiftui-flow-layout"),
                     .product(name: "Persist", package: "Tool"),
-                    .product(name: "Terminal", package: "Tool")
                 ]
             ),
         
@@ -298,4 +297,3 @@ let package = Package(
         )
     ]
 )
-
